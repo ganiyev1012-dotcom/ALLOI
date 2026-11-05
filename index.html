@@ -65,6 +65,7 @@ h1 span{color:var(--a)}
 .dot.d2{width:7px;height:7px;margin:-3.5px 0 0 -3.5px;background:var(--c)}
 .dot.d3{width:5px;height:5px;margin:-2.5px 0 0 -2.5px;background:var(--b)}
 .dot.d1.big{width:20px;height:20px;margin:-10px 0 0 -10px;background:rgba(37,99,235,.25)}
+.ai{background:var(--card);border:1px solid var(--line);border-left:6px solid var(--c);border-radius:18px;padding:14px 16px;margin-bottom:12px}
 .note{margin-top:30px;color:var(--muted);font-size:13px}
 @media (prefers-reduced-motion:no-preference){
  .b1{animation:drift 14s ease-in-out infinite alternate}
@@ -125,77 +126,71 @@ h1 span{color:var(--a)}
 <div id="out"></div>
 <div id="pending"></div>
 
-<p class="note">Hozirgi versiya: namuna ma’lumotlar bilan prototip. Narxlar va do‘konlar haqiqiy emas. Haqiqiy versiyada narxlar so‘rov paytida olinadi va saqlanmaydi.</p>
+<p class="note">ALLOI narxlarni so‘rov paytida internetdan qidiradi. Narx va mavjudlik do‘konda farq qilishi mumkin, xarid qilishdan oldin do‘kon sahifasida tekshiring.</p>
 </main>
 <script>
 var $=function(id){return document.getElementById(id)};
 var RM=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-var SELLERS=[
- {n:"Namuna do‘kon 1",d:600,partner:false,c:"#2563eb"},
- {n:"Namuna do‘kon 2",d:1100,partner:true,c:"#ffc933"},
- {n:"Namuna do‘kon 3",d:1700,partner:false,c:"#5fd39a"},
- {n:"Namuna do‘kon 4",d:2300,partner:false,c:"#5b9bff"},
- {n:"Namuna do‘kon 5",d:2900,partner:false,c:"#2563eb"},
- {n:"Namuna do‘kon 6",d:3500,partner:false,c:"#5fd39a"}
-];
-var items=[],timers=[],nodes={};
-function hash(s){var h=7;for(var i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))>>>0}return h}
-function fmt(n){return String(n).replace(/\B(?=(\d{3})+(?!\d))/g," ")+" soʻm"}
+var WORKER_URL="https://WORKER-MANZILI.workers.dev";
+var PALETTE=["#2563eb","#5fd39a","#ffc933","#5b9bff","#2563eb","#5fd39a"];
+var reqId=0;
 function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!==undefined)e.textContent=x;return e}
 "ALLOI".split("").forEach(function(ch,i){var s=el("span","",ch);s.style.setProperty("--i",i);$("title").appendChild(s)});
-function countUp(node,to){
-  if(RM){node.textContent=fmt(to);return}
+function fmtNum(n){return String(n).replace(/\B(?=(\d{3})+(?!\d))/g," ")}
+function priceText(r){if(r.links)return"";return typeof r.price==="number"?fmtNum(Math.round(r.price))+" "+(r.currency||"soʻm"):"Narx aniqlanmadi"}
+function countUp(node,r){
+  if(typeof r.price!=="number"||RM){node.textContent=priceText(r);return}
   var t0=null;
-  function step(t){if(!t0)t0=t;var p=Math.min((t-t0)/900,1),e=1-Math.pow(1-p,3);node.textContent=fmt(Math.round(to*e/1000)*1000);if(p<1)requestAnimationFrame(step);else node.textContent=fmt(to)}
+  function step(t){if(!t0)t0=t;var p=Math.min((t-t0)/800,1),e=1-Math.pow(1-p,3);node.textContent=fmtNum(Math.round(r.price*e))+" "+(r.currency||"soʻm");if(p<1)requestAnimationFrame(step);else node.textContent=priceText(r)}
   requestAnimationFrame(step);
 }
-function build(i){
-  var card=el("div","item new"+(i.partner?" partner":""));
-  card.style.setProperty("--sc",i.color);
+function build(r,idx){
+  var card=el("div","item new");card.style.setProperty("--sc",PALETTE[idx%PALETTE.length]);
   card.addEventListener("animationend",function(){card.classList.remove("new")});
-  var l=el("div");
-  l.appendChild(el("div","name",i.title));
-  if(i.partner)l.firstChild.appendChild(el("span","badge b-p","Hamkor"));
-  l.appendChild(el("div","seller",i.seller));
-  var r=el("div");var pr=el("div","price","");r.appendChild(pr);
-  var a=el("a","link","Do‘konga o‘tish →");a.href="#";a.addEventListener("click",function(e){e.preventDefault()});
-  r.appendChild(a);card.appendChild(l);card.appendChild(r);
-  countUp(pr,i.price);
+  var l=el("div");l.appendChild(el("div","name",r.title||"Mahsulot"));
+  l.appendChild(el("div","seller",r.seller||"Do‘kon"));
+  if(r.note)l.appendChild(el("div","seller",r.note));
+  var right=el("div");var pr=el("div","price","");right.appendChild(pr);
+  if(/^https?:\/\//i.test(r.url||"")){var a=el("a","link","Do‘konga o‘tish →");a.href=r.url;a.target="_blank";a.rel="noopener noreferrer nofollow";right.appendChild(a)}
+  card.appendChild(l);card.appendChild(right);countUp(pr,r);
   return card;
 }
-function render(){
-  var out=$("out");
-  var cheapest=Math.min.apply(null,items.map(function(i){return i.price}));
-  var order=items.filter(function(i){return i.partner}).concat(items.filter(function(i){return !i.partner}).sort(function(a,b){return a.price-b.price}));
-  order.forEach(function(i){
-    var n=nodes[i.seller];
-    if(!n){n=build(i);nodes[i.seller]=n}
-    var isC=i.price===cheapest;
-    if(isC&&!n._c){n._c=el("span","badge b-c","Eng arzon");n.querySelector(".name").appendChild(n._c)}
-    if(!isC&&n._c){n._c.remove();n._c=null}
-    out.appendChild(n);
+var STORES=[["Uzum Market","uzum.uz"],["Asaxiy","asaxiy.uz"],["Mediapark","mediapark.uz"],["Texnomart","texnomart.uz"],["OLX","olx.uz"]];
+function linksMode(q,id){
+  var out=$("out"),pend=$("pending");pend.textContent="";$("dots").classList.remove("on");
+  STORES.forEach(function(s,i){
+    var u="https://www.google.com/search?q="+encodeURIComponent(q+" site:"+s[1]);
+    out.appendChild(build({title:s[0],seller:"“"+q+"” bo‘yicha natijalarni ko‘rish",url:u,links:true},i));
   });
-  var p=$("pending");p.textContent="";
-  for(var k=items.length;k<SELLERS.length;k++)p.appendChild(el("div","item ph"));
+  $("stxt").textContent=STORES.length+" ta do‘konda “"+q+"” bo‘yicha qidiruv tayyor. Narxlarni do‘kon sahifasida ko‘rasiz.";
 }
-function search(){
-  var q=$("q").value.trim(),st=$("stxt");
-  timers.forEach(clearTimeout);timers=[];items=[];nodes={};
-  $("out").textContent="";$("pending").textContent="";
+async function search(){
+  var q=$("q").value.trim(),st=$("stxt"),out=$("out"),pend=$("pending"),id=++reqId;
+  out.textContent="";pend.textContent="";
   if(!q){$("dots").classList.remove("on");st.textContent="Nima qidirayotganingizni yozing, masalan: telefon.";return}
+  if(WORKER_URL.indexOf("WORKER-MANZILI")>-1){linksMode(q,id);return}
   $("dots").classList.add("on");
-  st.textContent="“"+q+"” bo‘yicha "+SELLERS.length+" ta do‘kondan natijalar olinmoqda…";
-  render();
-  var done=0;
-  SELLERS.forEach(function(s){
-    timers.push(setTimeout(function(){
-      var h=hash(q+s.n);
-      items.push({title:q.charAt(0).toUpperCase()+q.slice(1)+" — model "+(h%90+10),seller:s.n,partner:s.partner,color:s.c,price:(300+h%1700)*1000});
-      done++;render();
-      if(done<SELLERS.length){st.textContent=done+"/"+SELLERS.length+" do‘kondan natija keldi, qolganlari yuklanmoqda…"}
-      else{$("dots").classList.remove("on");st.textContent="Hammasi tayyor: "+items.length+" ta natija. Hamkor natijasi alohida belgilangan, qolganlari narx bo‘yicha."}
-    },s.d));
-  });
+  st.textContent="“"+q+"” bo‘yicha internetdan qidirilmoqda… (10-30 soniya ketishi mumkin)";
+  for(var k=0;k<4;k++)pend.appendChild(el("div","item ph"));
+  var data;
+  try{
+    var res=await fetch(WORKER_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({q:q})});
+    if(!res.ok)throw new Error("bad");
+    data=await res.json();
+  }catch(e){
+    if(id!==reqId)return;
+    pend.textContent="";$("dots").classList.remove("on");
+    st.textContent="Hozir qidirib bo‘lmadi. Birozdan keyin qayta urinib ko‘ring.";return;
+  }
+  if(id!==reqId)return;
+  pend.textContent="";$("dots").classList.remove("on");
+  var rs=Array.isArray(data.results)?data.results:[];
+  if(data.summary){var box=el("div","ai");box.appendChild(el("div","name","AI xulosasi"));box.appendChild(el("div","",data.summary));out.appendChild(box)}
+  var nums=rs.filter(function(r){return typeof r.price==="number"});
+  var same=nums.length>1&&nums.every(function(r){return r.currency===nums[0].currency});
+  var min=same?Math.min.apply(null,nums.map(function(r){return r.price})):null;
+  rs.forEach(function(r,i){var c=build(r,i);if(same&&r.price===min)c.querySelector(".name").appendChild(el("span","badge b-c","Eng arzon"));out.appendChild(c)});
+  st.textContent=rs.length?rs.length+" ta natija topildi. Narxni xarid qilishdan oldin do‘konda tekshiring.":"Hech narsa topilmadi. Boshqacharoq yozib ko‘ring.";
 }
 $("btn").addEventListener("click",search);
 $("q").addEventListener("keydown",function(e){if(e.key==="Enter")search()});
