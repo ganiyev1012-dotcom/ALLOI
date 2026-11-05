@@ -131,7 +131,7 @@ h1 span{color:var(--a)}
 <script>
 var $=function(id){return document.getElementById(id)};
 var RM=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-var WORKER_URL="https://WORKER-MANZILI.workers.dev";
+var WORKER_URL="https://alloi-search.ganiyev1012.workers.dev";
 var PALETTE=["#2563eb","#5fd39a","#ffc933","#5b9bff","#2563eb","#5fd39a"];
 var reqId=0;
 function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!==undefined)e.textContent=x;return e}
@@ -175,12 +175,12 @@ async function search(){
   var data;
   try{
     var res=await fetch(WORKER_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({q:q})});
-    if(!res.ok)throw new Error("bad");
+    if(!res.ok){var er=new Error("bad");er.s=res.status;throw er}
     data=await res.json();
   }catch(e){
     if(id!==reqId)return;
     pend.textContent="";$("dots").classList.remove("on");
-    st.textContent="Hozir qidirib bo‘lmadi. Birozdan keyin qayta urinib ko‘ring.";return;
+    st.textContent=e.s===429?"Hozir so‘rovlar juda ko‘p. Bir daqiqadan keyin urinib ko‘ring.":"Hozir qidirib bo‘lmadi. Birozdan keyin qayta urinib ko‘ring.";return;
   }
   if(id!==reqId)return;
   pend.textContent="";$("dots").classList.remove("on");
@@ -190,6 +190,7 @@ async function search(){
   var same=nums.length>1&&nums.every(function(r){return r.currency===nums[0].currency});
   var min=same?Math.min.apply(null,nums.map(function(r){return r.price})):null;
   rs.forEach(function(r,i){var c=build(r,i);if(same&&r.price===min)c.querySelector(".name").appendChild(el("span","badge b-c","Eng arzon"));out.appendChild(c)});
+  if(data.sg){var fr=document.createElement("iframe");fr.setAttribute("sandbox","allow-popups allow-popups-to-escape-sandbox");fr.srcdoc=data.sg;fr.style.cssText="width:100%;height:70px;border:0;margin-top:10px;border-radius:12px;color-scheme:light";out.appendChild(fr)}
   st.textContent=rs.length?rs.length+" ta natija topildi. Narxni xarid qilishdan oldin do‘konda tekshiring.":"Hech narsa topilmadi. Boshqacharoq yozib ko‘ring.";
 }
 $("btn").addEventListener("click",search);
